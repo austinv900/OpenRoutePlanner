@@ -1,0 +1,152 @@
+﻿@page "/drivers"
+@using System.Net
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using System.Collections.Immutable
+@using System.Linq
+@rendermode InteractiveServer
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+
+@inject DriverModelManager ModelManager
+@inject AccountModelManager AccountManager
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContext
+
+<PageTitle>Driver Management</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h2 class="mb-0">Drivers</h2>
+    <div class="input-group w-auto">
+        <input type="text" class="form-control" placeholder="Search..." @bind="_searchTerm" @bind:event="oninput" />
+    </div>
+    <button class="btn btn-primary" @onclick="() => NavigateEdit(null)">
+        <i class="fa-solid fa-plus me-2"></i> Create Driver
+    </button>
+</div>
+
+<div class="mb-3">
+    <label class="form-label me-2">Sort by:</label>
+    <select class="form-select d-inline w-auto" @bind="_sortOption">
+        <option value="name">Name</option>
+        <option value="email">Email</option>
+        <option value="phone">Phone</option>
+    </select>
+</div>
+
+<ul class="list-unstyled row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+    @foreach (var driver in FilteredDrivers)
+    {
+        <li class="col">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <h5 class="card-title">@driver.FullName</h5>
+                    <div class="mb-2 small">
+                        <strong>Phone: </strong>
+                        @if (!string.IsNullOrWhiteSpace(driver.PhoneNumber))
+                        {
+                            <a href="tel:@driver.PhoneNumber">@driver.PhoneNumber</a>
+                        }
+                        else
+                        {
+                            <span class="text-muted">N/A</span>
+                        }
+                        <br />
+                        <strong>Email: </strong>
+                        @if (!string.IsNullOrWhiteSpace(driver.Email))
+                        {
+                            <a href="mailto:@driver.Email">@driver.Email</a>
+                        }
+                        else
+                        {
+                            <span class="text-muted">N/A</span>
+                        }
+                        <br />
+                        <strong>Workday ID:</strong> @driver.EmployeeId <br />
+                        <strong>Alpha Code:</strong> @driver.AlphaCode <br />
+                        <strong>Endorsements:</strong> @driver.Endorsements.Display(true) <br />
+                        <strong>Account:</strong>
+                        @{
+                            var account = GetAccount(driver.AccountId);
+                        }
+                        @if (!string.IsNullOrWhiteSpace(account?.ShortName))
+                        {
+                            @(account.ShortName)
+                        }
+                        else
+                        {
+                            <span class="text-muted">N/A</span>
+                        }
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-top-0 d-flex justify-content-end gap-2">
+                    <button class="btn btn-sm btn-outline-warning" title="Edit" @onclick="() => NavigateEdit(driver.Id)">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" title="Delete" @onclick="() => OnDelete(driver)">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+        </li>
+    }
+</ul>
+
+@code {
+    private ImmutableArray<DriverProfile> DriverList { get; set; } = ImmutableArray<DriverProfile>.Empty;
+    private ImmutableArray<BusinessAccount> AccountList { get; set; } = ImmutableArray<BusinessAccount>.Empty;
+
+    private string _searchTerm = string.Empty;
+    private string _sortOption = "name";
+
+    private IEnumerable<DriverProfile> FilteredDrivers => DriverList
+        .Where(driver => string.IsNullOrWhiteSpace(_searchTerm)
+            || driver.FullName.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+            || (driver.Email?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (driver.PhoneNumber?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+        .OrderBy(driver => _sortOption switch
+        {
+            "email" => driver.Email,
+            "phone" => driver.PhoneNumber,
+            _ => driver.FullName
+        }, StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        DriverList = await ModelManager.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        AccountList = await AccountManager.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        StateHasChanged();
+    }
+
+    private async Task OnDelete(DriverProfile driver)
+    {
+        HttpStatusCode code = await ModelManager.Delete(driver.Id, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        if (code == HttpStatusCode.OK)
+        {
+            DriverList = DriverList.Remove(driver);
+            StateHasChanged();
+        }
+    }
+
+    private BusinessAccount? GetAccount(Guid? id)
+    {
+        if (id.HasValue)
+        {
+            return AccountList.FirstOrDefault(x => x.Id == id);
+        }
+        return null;
+    }
+
+    private Task NavigateEdit(Guid? id)
+    {
+        if (id.HasValue)
+        {
+            Navigation.NavigateTo($"/modify-driver/{id.Value}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/modify-driver");
+        }
+        return Task.CompletedTask;
+    }
+}

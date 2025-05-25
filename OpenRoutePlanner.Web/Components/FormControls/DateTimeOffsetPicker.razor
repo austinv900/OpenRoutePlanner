@@ -1,0 +1,66 @@
+﻿@using System.Globalization
+
+<div class="d-flex flex-column gap-2">
+    <InputDate TValue="DateTime?" Type="InputDateType.DateTimeLocal" @bind-Value="_dateTime" class="form-control" />
+    <select class="form-select" @bind="_selectedOffsetMinutes">
+        @foreach (var item in OffsetOptions)
+        {
+            <option value="@item.Offset.TotalMinutes">UTC@(item.Offset >= TimeSpan.Zero ? "+" : "-")@item.Offset.ToString(@"hh\:mm")</option>
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter] public DateTimeOffset? Value { get; set; }
+    [Parameter] public EventCallback<DateTimeOffset?> ValueChanged { get; set; }
+
+    private TimeSpan? LastOffset { get; set; }
+
+    private DateTime? _dateTime
+    {
+        get => Value?.DateTime;
+        set
+        {
+            if (value == null)
+            {
+                Value = null;
+                Notify(null);
+                return;
+            }
+
+            Value = new DateTimeOffset(value.Value, TimeSpan.FromMinutes(_selectedOffsetMinutes));
+            Notify(value);
+        }
+    }
+
+    private double _selectedOffsetMinutes
+    {
+        get => Value.HasValue ? Value.Value.Offset.TotalMinutes : LastOffset.HasValue ? LastOffset.Value.TotalMinutes : TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow).TotalMinutes;
+        set
+        {
+            var nos = TimeSpan.FromMinutes(value);
+            if (Value.HasValue)
+            {
+                Value = Value.Value.ToOffset(nos);
+            }
+            LastOffset = nos;
+            Notify(Value);
+        }
+    }
+
+    private IEnumerable<(string Id, TimeSpan Offset)> OffsetOptions =>
+        TimeZoneInfo.GetSystemTimeZones()
+            .Select(tz => (tz.Id, Offset: tz.GetUtcOffset(DateTime.UtcNow)))
+            .DistinctBy(x => x.Offset)
+            .OrderBy(x => x.Offset);
+
+    private void Notify(DateTimeOffset? time)
+    {
+        if (!ValueChanged.HasDelegate)
+        {
+            return;
+        }
+
+        ValueChanged.InvokeAsync(time);
+    }
+}

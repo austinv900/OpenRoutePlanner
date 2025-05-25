@@ -1,0 +1,120 @@
+﻿@page "/modify-tractor"
+@page "/modify-tractor/{TractorId:guid?}"
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using OpenRoutePlanner.Components.FormControls
+@using System.Net
+@using System.Collections.Immutable
+@rendermode InteractiveServer
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+@inject TractorsModelManager TractorManager
+@inject DriverModelManager DriverManager
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContext
+
+<PageTitle>Tractor Management</PageTitle>
+<h3>Manage Tractor</h3>
+
+@if (Truck == null)
+{
+    <h1><em>Page is currently loading</em></h1>
+}
+else
+{
+    <EditForm Model="Truck" OnValidSubmit="OnSubmit" FormName="ModifyTractor">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="container">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="tractorName" class="form-label">Name</label>
+                    <InputText id="tractorName" class="form-control" @bind-Value="Truck.Name" />
+                </div>
+                <div class="col-md-6">
+                    <label for="tractorVin" class="form-label">VIN Number</label>
+                    <InputText id="tractorVin" class="form-control" @bind-Value="Truck.VinNumber" />
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Cab Type</label>
+                    <div class="form-check">
+                        <InputCheckbox id="isSleeper" class="form-check-input" @bind-Value="Truck.IsSleeper" />
+                        <label class="form-check-label" for="isSleeper">Sleeper Cab</label>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="tractorDriver" class="form-label">Assigned Driver</label>
+                    <InputSelect id="tractorDriver" class="form-select" @bind-Value="Truck.DriverId">
+                        <option value="">-- Unassigned --</option>
+                        @foreach (var driver in DriverList)
+                        {
+                            <option value="@driver.Id">@driver.FullName</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="tractorOdometer" class="form-label">Odometer (miles)</label>
+                    <InputNumber id="tractorOdometer" class="form-control" @bind-Value="Truck.Odometer" />
+                </div>
+                <div class="col-md-3">
+                    <label for="tractorPlate" class="form-label">License Plate</label>
+                    <InputText id="tractorPlate" class="form-control" @bind-Value="Truck.LicensePlate" />
+                </div>
+                <div class="col-md-3">
+                    <label for="tractorState" class="form-label">Plate State</label>
+                    <InputText id="tractorState" class="form-control" @bind-Value="Truck.State" />
+                </div>
+                <div class="col-md-3">
+                    <label for="tractorGeotab" class="form-label">Geotab ID</label>
+                    <InputText id="tractorGeotab" class="form-control" @bind-Value="Truck.GeotabId" />
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Save Tractor</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? TractorId { get; set; }
+
+    private Tractor? Truck { get; set; } = new();
+
+    private ImmutableArray<DriverProfile> DriverList { get; set; } = ImmutableArray<DriverProfile>.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TractorId.HasValue)
+        {
+            Truck = await TractorManager.Get(TractorId.Value, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+
+        DriverList = await DriverManager.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        StateHasChanged();
+    }
+
+    private async Task OnSubmit(EditContext args)
+    {
+        if (TractorId.HasValue)
+        {
+            await TractorManager.Put(TractorId.Value, Truck!, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+        else
+        {
+            await TractorManager.Post(Truck!, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+
+        Navigation.NavigateTo("/tractors");
+    }
+}

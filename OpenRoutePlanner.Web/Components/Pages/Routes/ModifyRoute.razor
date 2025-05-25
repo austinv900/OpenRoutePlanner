@@ -1,0 +1,203 @@
+﻿@page "/modify-route"
+@page "/modify-route/{RouteId:guid}"
+@rendermode InteractiveServer
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using OpenRoutePlanner
+@using OpenRoutePlanner.Components.FormControls
+@using System.Collections.Immutable
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+@inject AccountModelManager AccountManager
+@inject DriverModelManager DriverManager
+@inject TractorsModelManager TractorManager
+@inject RoutesModelManager RouteManager
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContext
+
+<PageTitle>Create Route</PageTitle>
+
+@if (ListAccounts == null || ListDrivers == null || ListTractors == null)
+{
+    <h1><em>Page is currently loading</em></h1>
+}
+else
+{
+    <h1>Create Route</h1>
+
+    <p>This form is used to create a route</p>
+
+    <EditForm Model="Route" OnValidSubmit="OnSubmit" FormName="ModifyRoute">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="container">
+            <!-- Basic Info -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="routeName" class="form-label">Route Name</label>
+                    <InputText id="routeName" class="form-control" @bind-Value="Route.Name" />
+                </div>
+                <div class="col-md-3">
+                    <label for="routeStops" class="form-label">Number of Stops</label>
+                    <InputNumber id="routeStops" class="form-control" @bind-Value="Route.Stops" />
+                </div>
+                <div class="col-md-3">
+                    <label for="routeMiles" class="form-label">Total Miles</label>
+                    <InputNumber id="routeMiles" class="form-control" @bind-Value="Route.Miles" step="0.1" />
+                </div>
+            </div>
+
+            <!-- Equipment and Personnel -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="tractorSelect" class="form-label">Assigned Tractor</label>
+                    <InputSelect id="tractorSelect" class="form-select" @bind-Value="Route.TractorId">
+                        <option value="">-- Unassigned --</option>
+                        @foreach (var tractor in ListTractors)
+                        {
+                            <option value="@tractor.Id">@tractor.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <label for="driverSelect" class="form-label">Assigned Driver</label>
+                    <InputSelect id="driverSelect" class="form-select" @bind-Value="Route.DriverId">
+                        <option value="">-- Unassigned --</option>
+                        @foreach (var driver in ListDrivers)
+                        {
+                            <option value="@driver.Id">@driver.FullName</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <label for="accountSelect" class="form-label">Assigned Account</label>
+                    <InputSelect id="accountSelect" class="form-select" @bind-Value="Route.AccountId">
+                        <option value="">-- Unassigned --</option>
+                        @foreach (var account in ListAccounts)
+                        {
+                            <option value="@account.Id">@account.ShortName</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+
+            <!-- Scheduling -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Start Time</label>
+                    <DateTimeOffsetPicker Value="Route.StartTime" ValueChanged="(x) => OnDateTimeChanged(0, x)" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">End Time</label>
+                    <DateTimeOffsetPicker Value="Route.EndTime" ValueChanged="(x) => OnDateTimeChanged(1, x)" />
+                </div>
+            </div>
+
+            <!-- Endorsements -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Required Endorsements</label>
+                    <EnumCheckbox TEnum="LicenseEndorsement" @bind-Value="Route.RequiredEndorsements" />
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check mt-4">
+                        <InputCheckbox id="isCompleted" class="form-check-input" @bind-Value="Route.IsCompleted" />
+                        <label class="form-check-label" for="isCompleted">Mark as Completed</label>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Trailers</label>
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" placeholder="Enter trailer ID..." @bind="_newTrailer" @bind:event="oninput" />
+                        <button class="btn btn-outline-secondary" type="button" @onclick="AddTrailer">Add</button>
+                    </div>
+                    <ul class="list-group">
+                        @foreach (var trailer in Route.Trailers)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                @trailer
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveTrailer(trailer)">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Save Route</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid? RouteId { get; set; }
+
+    [SupplyParameterFromForm]
+    private RoutePlan Route { get; set; } = new();
+    private string _newTrailer = string.Empty;
+
+    private ImmutableArray<BusinessAccount>? ListAccounts;
+    private ImmutableArray<DriverProfile>? ListDrivers;
+    private ImmutableArray<Tractor> ListTractors;
+
+    private void AddTrailer()
+    {
+        if (!string.IsNullOrWhiteSpace(_newTrailer))
+        {
+            Route.Trailers ??= new List<string>();
+            Route.Trailers.Add(_newTrailer.Trim());
+            _newTrailer = string.Empty;
+        }
+    }
+
+    private void RemoveTrailer(string trailer)
+    {
+        Route.Trailers?.Remove(trailer);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (RouteId.HasValue)
+        {
+            Route = (await RouteManager.Get(RouteId.Value, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None)) ?? new();
+        }
+
+        ListAccounts = await AccountManager.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        ListDrivers = await DriverManager.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        ListTractors = await TractorManager.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+    }
+
+    private async Task OnSubmit(EditContext args)
+    {
+        if (RouteId.HasValue)
+        {
+            await RouteManager.Put(RouteId.Value, Route, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+        else
+        {
+            await RouteManager.Post(Route, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+
+        Navigation.NavigateTo("/routes");
+    }
+
+    private void OnDateTimeChanged(int pos, DateTimeOffset? time)
+    {
+        switch (pos)
+        {
+            case 0:
+                Route.StartTime = time;
+                break;
+
+            case 1:
+                Route.EndTime = time;
+                break;
+        }
+    }
+}

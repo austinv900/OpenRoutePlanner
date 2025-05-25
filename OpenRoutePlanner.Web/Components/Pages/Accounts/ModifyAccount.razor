@@ -1,0 +1,98 @@
+﻿@page "/modify-account"
+@page "/modify-account/{AccountId:guid?}"
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using OpenRoutePlanner.Components.FormControls
+@using System.Net
+@rendermode InteractiveServer
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+@inject AccountModelManager ModelManager
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContext
+
+<PageTitle>Modify Account</PageTitle>
+<h3>Modify Account</h3>
+
+@if (Account == null)
+{
+    <h1><em>Page is currently loading</em></h1>
+}
+else
+{
+    <EditForm Model="Account" OnValidSubmit="OnSubmit" FormName="ModifyAccount">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="container">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="accountName" class="form-label">Account Name</label>
+                    <InputText id="accountName" class="form-control" @bind-Value="Account.ShortName" />
+                </div>
+                <div class="col-md-6">
+                    <label for="accountAddress" class="form-label">Address</label>
+                    <InputText id="accountAddress" class="form-control" @bind-Value="Account.Address" />
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="accountEmail" class="form-label">Email Address</label>
+                    <InputText id="accountEmail" class="form-control" @bind-Value="Account.Email" />
+                </div>
+                <div class="col-md-6">
+                    <label for="accountPhone" class="form-label">Phone Number</label>
+                    <InputText id="accountPhone" class="form-control" @bind-Value="Account.PhoneNumber" />
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="accountCostCenter" class="form-label">Cost Center</label>
+                    <InputText id="accountCostCenter" class="form-control" @bind-Value="Account.CostCenter" />
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label">Needed Endorsements</label>
+                    <EnumCheckbox TEnum="LicenseEndorsement" @bind-Value="Account.RequiredEndorsements" />
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? AccountId { get; set; }
+
+    private BusinessAccount? Account { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AccountId.HasValue)
+        {
+            Account = await ModelManager.Get(AccountId.Value, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSubmit(EditContext args)
+    {
+        if (AccountId.HasValue)
+        {
+            await ModelManager.Put(AccountId.Value, Account!, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+        else
+        {
+            await ModelManager.Post(Account!, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+
+        Navigation.NavigateTo("/accounts");
+    }
+}

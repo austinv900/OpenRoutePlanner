@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  openrouteplanner.apiservice:
+    build:
+      context: .
+      dockerfile: OpenRoutePlanner.ApiService/Dockerfile
+    ports:
+      - "5000:8080"
+    volumes:
+      - dataprotection:/root/.aspnet/DataProtection-Keys
+      - sqlite_data:/app/data
+    environment:
+      - Geotab__Username=GEOTAB_USERNAME
+      - Geotab__Password=GEOTAB_PASSWORD
+      - Geotab__Database=GEOTAB_DATABASE
+      - Geotab__Server=my.geotab.com
+    networks:
+      - appnet
+
+  openrouteplanner.web:
+    build:
+      context: .
+      dockerfile: OpenRoutePlanner.Web/Dockerfile
+    ports:
+      - "5001:8080"
+    volumes:
+      - dataprotection:/root/.aspnet/DataProtection-Keys
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    networks:
+      - appnet
+    depends_on:
+      - openrouteplanner.apiservice
+
+networks:
+  appnet:
+
+volumes:
+  dataprotection:
+  sqlite_data:

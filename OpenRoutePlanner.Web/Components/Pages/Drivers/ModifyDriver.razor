@@ -1,0 +1,124 @@
+﻿@page "/modify-driver"
+@page "/modify-driver/{DriverId:guid?}"
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using OpenRoutePlanner.Components.FormControls
+@using System.Collections.Immutable
+@using System.Net
+@rendermode InteractiveServer
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+@inject DriverModelManager Drivers
+@inject AccountModelManager Accounts
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContext
+
+<PageTitle>Driver Management</PageTitle>
+<h3>Manage Driver</h3>
+
+@if (Driver == null || AccountList == null)
+{
+    <h1><em>Page is currently loading</em></h1>
+}
+else
+{
+    <EditForm Model="Driver" OnValidSubmit="OnSubmit" FormName="ModifyDriver">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="container">
+            <!-- Driver Information -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="driverFirstName" class="form-label">First Name</label>
+                    <InputText id="driverFirstName" class="form-control" @bind-Value="Driver.FirstName" />
+                </div>
+                <div class="col-md-6">
+                    <label for="driverLastName" class="form-label">Last Name</label>
+                    <InputText id="driverLastName" class="form-control" @bind-Value="Driver.LastName" />
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="driverEmail" class="form-label">Email Address</label>
+                    <InputText id="driverEmail" class="form-control" @bind-Value="Driver.Email" />
+                </div>
+                <div class="col-md-6">
+                    <label for="driverPhoneNumber" class="form-label">Phone Number</label>
+                    <InputText id="driverPhoneNumber" class="form-control" @bind-Value="Driver.PhoneNumber" />
+                </div>
+            </div>
+
+            <!-- Employee Details -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="driverAlphaCode" class="form-label">Alpha Code</label>
+                    <InputText id="driverAlphaCode" class="form-control" @bind-Value="Driver.AlphaCode" />
+                </div>
+                <div class="col-md-6">
+                    <label for="driverId" class="form-label">Workday ID</label>
+                    <InputText id="driverId" class="form-control" @bind-Value="Driver.EmployeeId" />
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="account" class="form-label">Registered Account</label>
+                    <InputSelect id="account" class="form-select" @bind-Value="Driver.AccountId">
+                        <option value="">--- Select an account ---</option>
+                        @foreach (var item in AccountList)
+                        {
+                            <option value="@item.Id">@item.FullName</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Endorsements</label>
+                    <EnumCheckbox TEnum="LicenseEndorsement" @bind-Value="Driver.Endorsements" />
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </EditForm>
+
+
+}
+
+@code {
+    [Parameter]
+    public Guid? DriverId { get; set; }
+
+    private DriverProfile? Driver { get; set; } = new();
+    private ImmutableArray<BusinessAccount>? AccountList { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        AccountList = await Accounts.List(default, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        if (DriverId.HasValue)
+        {
+            Driver = await Drivers.Get(DriverId.Value, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSubmit(EditContext args)
+    {
+        if (Driver == null) return;
+
+        if (DriverId.HasValue)
+        {
+            await Drivers.Put(DriverId.Value, Driver!, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+        else
+        {
+            await Drivers.Post(Driver!, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        }
+
+        Navigation.NavigateTo("/drivers");
+    }
+}

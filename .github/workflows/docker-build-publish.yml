@@ -1,0 +1,67 @@
+name: Build and Publish Docker Compose Services
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+  DOTNET_VERSION: "8.0"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install yq
+      run: |
+        YQ_VERSION=v4.44.1
+        curl -L https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64 -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+        yq --version
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract short SHA
+      id: vars
+      run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+
+    - name: Build and Push Docker Compose Services
+      run: |
+        services=$(docker compose config --services)
+        for service in $services; do
+          context=$(docker compose config | yq e ".services.\"$service\".build.context" -)
+          dockerfile=$(docker compose config | yq e ".services.\"$service\".build.dockerfile" -)
+          dockerfile=${dockerfile:-Dockerfile} # fallback to Dockerfile if not defined
+
+          image_name=${REGISTRY}/${OWNER}/${service}
+
+          echo "Building and pushing $image_name from $context using $dockerfile"
+
+          docker buildx build \
+            --file "$context/$dockerfile" \
+            --tag "$image_name:latest" \
+            --tag "$image_name:$SHORT_SHA" \
+            --push \
+            "$context"
+        done
+
+    - name: Done
+      run: echo "Docker images built and published successfully."

@@ -1,0 +1,141 @@
+﻿@page "/routes"
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using System.Net
+@using System.Collections.Immutable
+@rendermode InteractiveServer
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+
+@inject RoutesModelManager RouteManager
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContext
+
+<PageTitle>Routes</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h2 class="mb-0">Routes</h2>
+    <div class="input-group w-auto">
+        <input type="text" class="form-control" placeholder="Search..." @bind="_searchTerm" @bind:event="oninput" />
+    </div>
+    <button class="btn btn-primary" @onclick="() => NavigateEdit(null)">
+        <i class="fa-solid fa-plus me-2"></i> Create Route
+    </button>
+</div>
+
+<div class="mb-3">
+    <label class="form-label me-2">Sort by:</label>
+    <select class="form-select d-inline w-auto" @bind="_sortOption">
+        <option value="name">Name</option>
+        <option value="miles">Miles</option>
+        <option value="start">Start</option>
+        <option value="end">End</option>
+    </select>
+</div>
+
+<ul class="list-unstyled row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+    @foreach (var plan in FilteredRoutes)
+    {
+        <li class="col">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">@plan.Name</h5>
+                    <div class="mb-2 small">
+                        <strong>Stops:</strong> @plan.Stops <br />
+                        <strong>Miles:</strong> @plan.Miles.ToString("F2") <br />
+                        <strong>Tractor:</strong> @(plan.Tractor?.Name ?? "N/A") <br />
+                        <strong>Driver:</strong> @(plan.Driver?.FullName ?? "N/A") <br />
+                        <strong>Account:</strong> @(plan.Account?.FullName ?? "N/A") <br />
+                        <strong>Start:</strong> @(plan.StartTime?.ToLocalTime().ToString("g") ?? "N/A") <br />
+                        <strong>End:</strong> @(plan.EndTime?.ToLocalTime().ToString("g") ?? "N/A") <br />
+                        <strong>Completed: </strong>
+                        @if (plan.IsCompleted)
+                        {
+                            <span class="badge bg-success">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">No</span>
+                        }
+                        <br />
+                        <strong>Endorsements:</strong> @plan.RequiredEndorsements.Display(true)<br />
+                        @if (plan.Trailers != null && plan.Trailers.Any())
+                        {
+                            <strong>Trailers:</strong>
+                            <ul class="mb-0 ps-3">
+                                @foreach (var trailer in plan.Trailers)
+                                {
+                                    <li>@trailer</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-top-0 d-flex justify-content-end gap-2">
+                    <button class="btn btn-sm btn-outline-warning" title="Edit" @onclick="() => NavigateEdit(plan.Id)">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" title="Delete" @onclick="() => OnDelete(plan)">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+        </li>
+    }
+</ul>
+
+@code {
+    private ImmutableArray<RoutePlan> RouteList { get; set; } = ImmutableArray<RoutePlan>.Empty;
+    private string _searchTerm = string.Empty;
+    private string _sortOption = "name";
+
+    private IEnumerable<RoutePlan> FilteredRoutes => RouteList
+        .Where(plan => string.IsNullOrWhiteSpace(_searchTerm)
+            || plan.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+            || (plan.Driver?.FullName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (plan.Account?.FullName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+        .OrderBy(plan => _sortOption switch
+        {
+            "miles" => plan.Miles.ToString("F2"),
+            "start" => plan.StartTime?.ToString("o"),
+            "end" => plan.EndTime?.ToString("o"),
+            _ => plan.Name
+        }, StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        RouteList = await RouteManager.List(new()
+        {
+            IncludeAccount = true,
+            IncludeDriver = true,
+            IncludeTractor = true
+        }, HttpContext.HttpContext?.RequestAborted ?? CancellationToken.None);
+        StateHasChanged();
+    }
+
+    private async Task OnDelete(RoutePlan route)
+    {
+        HttpStatusCode responseCode = await RouteManager.Delete(route.Id);
+
+        if (responseCode == HttpStatusCode.OK)
+        {
+            RouteList = RouteList.Remove(route);
+            StateHasChanged();
+            return;
+        }
+
+        // TODO: Display Error
+    }
+
+    private void NavigateEdit(Guid? id = null)
+    {
+        if (id.HasValue)
+        {
+            Navigation.NavigateTo($"/modify-route/{id.Value}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/modify-route");
+        }
+    }
+}

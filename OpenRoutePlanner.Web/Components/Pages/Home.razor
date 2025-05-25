@@ -1,0 +1,135 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+@using OpenRoutePlanner.ModelManagers
+@using OpenRoutePlanner.Models
+@using System.Collections.Immutable
+@using System.Threading.Tasks;
+@inject RoutesModelManager RouteManager
+@inject DriverModelManager DriverManager
+@inject TractorsModelManager TractorManager
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Dashboard</h1>
+
+This will soon show current load details
+
+<div class="container">
+    <div class="row g-4">
+        
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Assigned Tractor</h5>
+                    @if (CurrentTractor != null)
+                    {
+                        <p class="card-text">
+                            <strong>@CurrentTractor.Name</strong><br />
+                            VIN: @(CurrentTractor.VinNumber ?? "N/A")<br />
+                            Odometer: @($"{CurrentTractor.Odometer:N0} mi")<br />
+                            Type: @(CurrentTractor.IsSleeper ? "Sleeper Cab" : "Day Cab")
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No tractor assigned.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Current Routes</h5>
+                    @if (!Routes.IsDefaultOrEmpty)
+                    {
+                        <ul class="list-group">
+                            @foreach (var route in Routes)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@route.Name</strong><br />
+                                        @route.Account.ShortName | @route.Stops stops | @($"{route.Miles:F1}") miles | @route.RequiredEndorsements
+                                    </div>
+                                    @if (!route.StartTime.HasValue)
+                                    {
+                                        <button class="btn btn-sm btn-success" @onclick="() => StartRoute(route)"><i class="fa-solid fa-check me-1"></i> Start</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-success" @onclick="() => EndRoute(route)"><i class="fa-solid fa-check me-1"></i> Complete</button>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted">All routes completed.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private Tractor? CurrentTractor { get; set; }
+    private DriverProfile? Driver { get; set; }
+    private ImmutableArray<RoutePlan> Routes { get; set; } = ImmutableArray<RoutePlan>.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Driver = (await DriverManager.List(new()
+        {
+            AlphaCode = "VANA7"
+        })).FirstOrDefault();
+
+        if (Driver == null)
+        {
+            return;
+        }
+
+        CurrentTractor = (await TractorManager.List(new()
+        {
+            DriverId = Driver.Id
+        })).FirstOrDefault();
+
+        Routes = await RouteManager.List(new()
+        {
+            DriverId = Driver.Id,
+            IsCompleted = false,
+            IncludeAccount = true
+        });
+    }
+
+    private async Task StartRoute(RoutePlan route)
+    {
+        route.StartTime = DateTimeOffset.UtcNow;
+        await RouteManager.Put(route.Id, route);
+        await UpdateTractor();
+    }
+
+    private async Task EndRoute(RoutePlan route)
+    {
+        route.EndTime = DateTimeOffset.UtcNow;
+        route.IsCompleted = true;
+        await RouteManager.Put(route.Id, route);
+        Routes = Routes.Remove(route);
+        await UpdateTractor();
+    }
+
+    private async Task UpdateTractor()
+    {
+        if (CurrentTractor == null)
+        {
+            return;
+        }
+
+        CurrentTractor = await TractorManager.Get(CurrentTractor.Id);
+    }
+}

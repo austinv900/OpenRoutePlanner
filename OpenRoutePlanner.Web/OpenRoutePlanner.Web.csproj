@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OpenRoutePlanner</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenRoutePlanner.Common\OpenRoutePlanner.Common.csproj" />
+    <ProjectReference Include="..\OpenRoutePlanner.ServiceDefaults\OpenRoutePlanner.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

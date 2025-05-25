@@ -1,0 +1,57 @@
+﻿@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Authorization
+@using OpenRoutePlanner.Authentication
+@inject NavigationManager Navigation
+
+<EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label>Email</label>
+        <InputText @bind-Value="loginModel.Email" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>Password</label>
+        <InputText @bind-Value="loginModel.Password" type="password" class="form-control" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Login</button>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="text-danger mt-2">@errorMessage</div>
+    }
+</EditForm>
+
+@code {
+    private LoginModel loginModel = new();
+    private string? errorMessage;
+
+    private Task HandleLogin()
+    {
+        var result = new { Succeeded = true, ErrorMessage = "" }; //await AuthService.LoginAsync(loginModel.Email, loginModel.Password);
+
+        if (result.Succeeded)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public class LoginModel
+    {
+        [Required]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Password { get; set; } = string.Empty;
+    }
+}
